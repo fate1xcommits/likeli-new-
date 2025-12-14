@@ -1,0 +1,262 @@
+.controlsRow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 16px;
+    margin-bottom: 16px;
+    gap: 12px;
+}
+
+.controlsLeft {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.tabGroup {
+    display: inline-flex;
+    padding: 4px;
+    border-radius: 999px;
+    background: #f3f4f6;
+}
+
+.tab {
+    border: none;
+    background: transparent;
+    padding: 6px 16px;
+    border-radius: 999px;
+    font-size: 14px;
+    cursor: pointer;
+    color: #4b5563;
+    transition: all 0.2s ease;
+}
+
+.tabActive {
+    background: #ffffff;
+    box-shadow: 0 0 0 1px #e5e7eb;
+    color: #111827;
+    font-weight: 600;
+}
+
+.headerActions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+}
+
+.btn {
+    border-radius: 999px;
+    padding: 6px 16px;
+    font-size: 14px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.btnPrimary {
+    background: #111827;
+    color: #ffffff;
+    border: none;
+}
+
+.btnPrimary:hover {
+    background: #1f2937;
+}
+
+.controlsRow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 16px;
+    margin-bottom: 16px;
+    gap: 12px;
+}
+
+.controlsLeft {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.tabGroup {
+    display: inline-flex;
+    padding: 4px;
+    border-radius: 999px;
+    background: #f3f4f6;
+}
+
+.tab {
+    border: none;
+    background: transparent;
+    padding: 6px 16px;
+    border-radius: 999px;
+    font-size: 14px;
+    cursor: pointer;
+    color: #4b5563;
+    transition: all 0.2s ease;
+}
+
+.tabActive {
+    background: #ffffff;
+    box-shadow: 0 0 0 1px #e5e7eb;
+    color: #111827;
+    font-weight: 600;
+}
+
+.headerActions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+}
+
+.btn {
+    border-radius: 999px;
+    padding: 6px 16px;
+    font-size: 14px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.btnPrimary {
+    background: #111827;
+    color: #ffffff;
+    border: none;
+}
+
+.btnPrimary:hover {
+    background: #1f2937;
+}
+
+.btnOutline {
+    background: transparent;
+    color: #111827;
+    border: 1px solid #d1d5db;
+}
+
+.btnOutline:hover {
+    background: #f9fafb;
+}
+
+.searchBar {
+    position: relative;
+    width: 240px;
+}
+
+.searchInput {
+    width: 100%;
+    background-color: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 999px;
+    padding: 6px 12px 6px 32px;
+    color: #111827;
+    font-size: 14px;
+    transition: all 0.2s;
+}
+
+.searchInput:focus {
+    outline: none;
+    border-color: #111827;
+}
+
+.searchIcon {
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #9ca3af;
+}
+
+.filters {
+    display: flex;
+    gap: 8px;
+}
+
+.filterPill {
+    padding: 6px 16px;
+    border-radius: 999px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    background-color: transparent;
+    color: #6b7280;
+    border: 1px solid transparent;
+    transition: all 0.2s;
+}
+
+.filterPill:hover {
+    color: #111827;
+    background-color: #f3f4f6;
+}
+
+.filterPillActive {
+    background-color: #f3f4f6;
+    color: #111827;
+    border-color: #e5e7eb;
+}
+
+/* Tab with icon and badge */
+.tab {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.tabBadge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    font-size: 11px;
+    font-weight: 600;
+    border-radius: 999px;
+    background: #e5e7eb;
+    color: #4b5563;
+}
+
+.tabBadgeGraduating {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    color: white;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.7;
+    }
+}
+
+.tabDescription {
+    display: flex;
+    align-items: center;
+    padding: 10px 16px;
+    background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+    margin-bottom: 8px;
+}
+
+.tabDescription p {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    font-size: 13px;
+    color: #64748b;
+}
+
+.tabDescription svg {
+    color: #94a3b8;
+}
