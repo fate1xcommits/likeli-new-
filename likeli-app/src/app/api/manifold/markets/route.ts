@@ -60,7 +60,8 @@ export async function POST(req: NextRequest) {
             shouldAnswersSumToOne = true, // Default to dependent (sum to 100%)
             category = 'General',
             rules = '',
-            userId = 'demo-user'
+            userId = 'demo-user',
+            resolutionSource  // Oracle configuration
         } = body;
 
         // Validate and clean answers for multi-choice
@@ -84,6 +85,13 @@ export async function POST(req: NextRequest) {
 
         if (!result.success) {
             return NextResponse.json({ error: result.error }, { status: 400 });
+        }
+
+        // Add oracle configuration if provided
+        if (resolutionSource && result.contract) {
+            result.contract.resolutionSource = resolutionSource;
+            result.contract.oracleStatus = 'UNRESOLVED';
+            saveContract(result.contract);
         }
 
         return NextResponse.json({

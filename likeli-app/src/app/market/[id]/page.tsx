@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import ChartContainer from "@/components/trade/ChartContainer";
 import MultiOutcomeChart from "@/components/market/MultiOutcomeChart";
+import OracleStatus from "@/components/market/OracleStatus";
 import TradePanel from "@/components/trade/TradePanel";
 import MultiChoiceAnswerList from "@/components/trade/MultiChoiceAnswerList";
 import styles from "@/components/trade/trade.module.css";
@@ -75,6 +76,64 @@ export default function MarketPage() {
     const handleOrderPlaced = () => {
         setRefreshTrigger(n => n + 1);
         fetchData();
+    };
+
+    // Oracle handlers
+    const handleOraclePropose = async () => {
+        try {
+            const res = await fetch('/api/oracle/propose', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ contractId: id })
+            });
+            const data = await res.json();
+            if (data.success) {
+                alert(`Proposal: ${data.proposal.resolution}\n${data.proposal.reasoning}`);
+                fetchData();
+            } else {
+                alert(`Error: ${data.error}`);
+            }
+        } catch (e) {
+            console.error(e);
+        }
+    };
+
+    const handleOracleChallenge = async (reason: string) => {
+        try {
+            const res = await fetch('/api/oracle/challenge', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ contractId: id, challengerId: 'demo-user', reason })
+            });
+            const data = await res.json();
+            if (data.success) {
+                alert('Challenge submitted!');
+                fetchData();
+            } else {
+                alert(`Error: ${data.error}`);
+            }
+        } catch (e) {
+            console.error(e);
+        }
+    };
+
+    const handleOracleFinalize = async () => {
+        try {
+            const res = await fetch('/api/oracle/finalize', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ contractId: id })
+            });
+            const data = await res.json();
+            if (data.success) {
+                alert(`Finalized as ${data.resolution}! ${data.payoutsCount} users paid.`);
+                fetchData();
+            } else {
+                alert(`Error: ${data.error}`);
+            }
+        } catch (e) {
+            console.error(e);
+        }
     };
 
     if (loading) return <div className="p-10 text-center">Loading market data...</div>;
@@ -150,6 +209,21 @@ export default function MarketPage() {
             </div>
 
             <div className={styles.rightColumn}>
+                {/* Oracle Status - Show for sandbox markets with resolution source */}
+                {isSandbox && marketDataFull?.resolutionSource && (
+                    <OracleStatus
+                        contractId={id}
+                        oracleStatus={marketDataFull.oracleStatus}
+                        proposal={marketDataFull.oracleProposal}
+                        challenge={marketDataFull.oracleChallenge}
+                        resolutionSource={marketDataFull.resolutionSource}
+                        currentUserId="demo-user"
+                        onPropose={handleOraclePropose}
+                        onChallenge={handleOracleChallenge}
+                        onFinalize={handleOracleFinalize}
+                    />
+                )}
+
                 {/* For multi-choice, show info panel instead of trade panel */}
                 {isMultiChoice ? (
                     <div className={styles.tradePanel}>

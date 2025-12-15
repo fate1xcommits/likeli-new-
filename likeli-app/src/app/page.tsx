@@ -5,9 +5,9 @@ import StatsStrip from "@/components/markets/StatsStrip";
 import MarketsGrid from "@/components/markets/MarketsGrid";
 import { useStore } from "@/lib/store";
 import CreateMarketModal from "@/components/markets/CreateMarketModal";
-import ParlayBuilder from "@/components/trade/ParlayBuilder";
+import { useParlay } from "@/context/ParlayContext";
 import styles from "./page.module.css";
-import { Search, Clock, TrendingUp, Sparkles, Trophy } from "lucide-react";
+import { Search, Clock, TrendingUp, Sparkles, Trophy, Layers } from "lucide-react";
 import clsx from "clsx";
 
 const CATEGORIES = ["All", "Crypto", "Macro", "Politics", "Sports", "Culture"];
@@ -17,11 +17,11 @@ type MarketTab = "sandbox" | "graduating" | "main";
 
 export default function Home() {
   const { markets } = useStore();
+  const { toggleOpen: toggleParlaySlip, legs } = useParlay();
   const [activeTab, setActiveTab] = useState<MarketTab>("sandbox");
   const [activeCategory, setActiveCategory] = useState("All");
   const [search, setSearch] = useState("");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [isParlayOpen, setIsParlayOpen] = useState(false);
 
   // Sandbox/Graduating Markets State
   const [allSandboxMarkets, setAllSandboxMarkets] = useState<any[]>([]);
@@ -189,9 +189,15 @@ export default function Home() {
           <button
             type="button"
             className={`${styles.btn} ${styles.btnOutline}`}
-            onClick={() => setIsParlayOpen(true)}
+            onClick={toggleParlaySlip}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+            }}
           >
-            Parlay Builder
+            <Layers size={14} />
+            Parlay{legs.length > 0 ? ` (${legs.length})` : ''}
           </button>
           <button
             type="button"
@@ -226,10 +232,6 @@ export default function Home() {
 
       {isCreateOpen && (
         <CreateMarketModal onClose={() => setIsCreateOpen(false)} />
-      )}
-
-      {isParlayOpen && (
-        <ParlayBuilder onClose={() => setIsParlayOpen(false)} />
       )}
     </div>
   );

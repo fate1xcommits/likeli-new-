@@ -4,8 +4,9 @@ import { useState, useEffect } from "react";
 import styles from "./markets.module.css";
 import clsx from "clsx";
 import Link from "next/link";
-import { Clock, Users, TrendingUp } from "lucide-react";
+import { Clock, Users, TrendingUp, ArrowUpRight, ArrowDownRight, Layers } from "lucide-react";
 import { GRADUATION_VOLUME_THRESHOLD, GRADUATION_TIMER_MS, formatTimeRemaining } from "@/lib/graduation";
+import { useParlay } from "@/context/ParlayContext";
 
 interface MarketCardProps {
     id: string | number;
@@ -40,9 +41,16 @@ export default function MarketCard({
 }: MarketCardProps) {
     const prob = (yes * 100).toFixed(0);
     const [timeRemaining, setTimeRemaining] = useState<string | null>(null);
+    const [isHovered, setIsHovered] = useState(false);
+    const { addLeg, hasMarket, canAddMore } = useParlay();
+    const isInParlay = hasMarket(String(id));
 
     // Calculate volume progress toward graduation
     const volumeProgress = Math.min(100, (volume / GRADUATION_VOLUME_THRESHOLD) * 100);
+
+    // Simulated price change for demo (random between -5 and +5)
+    const priceChange = ((yes * 100) - 50) > 0 ? 2.3 : -1.8;
+    const isUp = priceChange >= 0;
 
     // Update graduation timer countdown
     useEffect(() => {
@@ -59,14 +67,54 @@ export default function MarketCard({
         }
     }, [phase, graduationStartTime]);
 
+    // Handle add to parlay
+    const handleAddToParlay = (e: React.MouseEvent, outcome: "YES" | "NO") => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!isInParlay && canAddMore) {
+            addLeg(String(id), name, outcome, outcome === "YES" ? yes : no);
+        }
+    };
+
     return (
-        <Link href={`/market/${id}`} className={styles.marketCard}>
-            <div className={styles.cardHeader}>
-                <div className={styles.cardImagePlaceholder} />
-                <div className={styles.cardCategory}>
+        <Link
+            href={`/market/${id}`}
+            className={styles.marketCard}
+            onMouseEnter={() => setIsHovered(true)}
+            onMouseLeave={() => setIsHovered(false)}
+            style={{
+                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                transform: isHovered ? 'translateY(-4px)' : 'translateY(0)',
+                boxShadow: isHovered
+                    ? '0 12px 28px -8px rgba(0, 0, 0, 0.15)'
+                    : '0 1px 3px rgba(0, 0, 0, 0.06)',
+            }}
+        >
+            {/* Card Header with gradient overlay */}
+            <div className={styles.cardHeader} style={{
+                background: `linear-gradient(135deg, 
+                    ${phase === 'sandbox' ? '#3B82F6' : phase === 'graduating' ? '#10B981' : '#8B5CF6'} 0%, 
+                    ${phase === 'sandbox' ? '#1D4ED8' : phase === 'graduating' ? '#059669' : '#7C3AED'} 100%)`
+            }}>
+                {/* Category badge */}
+                <div className={styles.cardCategory} style={{
+                    background: 'rgba(255, 255, 255, 0.15)',
+                    backdropFilter: 'blur(8px)',
+                    color: 'white',
+                    padding: '4px 10px',
+                    borderRadius: '6px',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                }}>
                     {category}
                     {isMultiChoice && (
-                        <span className={styles.multiChoiceBadge}>
+                        <span style={{
+                            marginLeft: '6px',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '3px',
+                            opacity: 0.9,
+                        }}>
                             <Users size={10} /> {answerCount}
                         </span>
                     )}
@@ -79,61 +127,217 @@ export default function MarketCard({
                         phase === "sandbox" && styles.phaseBadgeSandbox,
                         phase === "graduating" && styles.phaseBadgeGraduating,
                         phase === "main" && styles.phaseBadgeMain
-                    )}>
-                        {phase === "sandbox" && "Sandbox"}
+                    )} style={{
+                        background: 'rgba(255, 255, 255, 0.95)',
+                        color: phase === 'sandbox' ? '#3B82F6' : phase === 'graduating' ? '#10B981' : '#8B5CF6',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                    }}>
+                        {phase === "sandbox" && "🧪 Sandbox"}
                         {phase === "graduating" && (
                             <>
                                 <Clock size={10} />
                                 {timeRemaining}
                             </>
                         )}
-                        {phase === "main" && "Main"}
+                        {phase === "main" && "🏆 Main"}
                     </div>
                 )}
+
+                {/* Large probability display */}
+                <div style={{
+                    position: 'absolute',
+                    bottom: '12px',
+                    right: '12px',
+                    fontSize: '32px',
+                    fontWeight: 700,
+                    color: 'white',
+                    textShadow: '0 2px 8px rgba(0,0,0,0.2)',
+                    lineHeight: 1,
+                }}>
+                    {prob}%
+                </div>
             </div>
 
-            <div className={styles.cardBody}>
-                <h3 className={styles.cardTitle}>{name}</h3>
+            {/* Card Body */}
+            <div className={styles.cardBody} style={{ padding: '16px' }}>
+                <h3 className={styles.cardTitle} style={{
+                    fontSize: '15px',
+                    fontWeight: 600,
+                    lineHeight: 1.4,
+                    marginBottom: '12px',
+                    color: 'var(--text-main)',
+                    display: '-webkit-box',
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: 'vertical',
+                    overflow: 'hidden',
+                }}>
+                    {name}
+                </h3>
 
-                <div className={styles.cardStats}>
-                    <div className={styles.cardStat}>
-                        <span className={styles.cardStatLabel}>{isMultiChoice ? "Top" : "Yes"}</span>
-                        <span className={clsx(styles.cardStatValue, "text-success")}>{yes.toFixed(2)}¢</span>
+                {/* Price row */}
+                <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    marginBottom: '12px',
+                }}>
+                    <div style={{ display: 'flex', gap: '16px' }}>
+                        <div style={{ textAlign: 'left' }}>
+                            <div style={{
+                                fontSize: '10px',
+                                color: 'var(--text-muted)',
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.05em',
+                                marginBottom: '2px'
+                            }}>
+                                {isMultiChoice ? "Top" : "Yes"}
+                            </div>
+                            <div style={{
+                                fontSize: '16px',
+                                fontWeight: 700,
+                                color: 'var(--color-success)'
+                            }}>
+                                {(yes * 100).toFixed(0)}¢
+                            </div>
+                        </div>
+                        <div style={{ textAlign: 'left' }}>
+                            <div style={{
+                                fontSize: '10px',
+                                color: 'var(--text-muted)',
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.05em',
+                                marginBottom: '2px'
+                            }}>
+                                {isMultiChoice ? "#2" : "No"}
+                            </div>
+                            <div style={{
+                                fontSize: '16px',
+                                fontWeight: 700,
+                                color: 'var(--color-danger)'
+                            }}>
+                                {(no * 100).toFixed(0)}¢
+                            </div>
+                        </div>
                     </div>
-                    <div className={styles.cardStat}>
-                        <span className={styles.cardStatLabel}>{isMultiChoice ? "#2" : "No"}</span>
-                        <span className={clsx(styles.cardStatValue, "text-danger")}>{no.toFixed(2)}¢</span>
+
+                    {/* Price change badge */}
+                    <div style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '2px',
+                        padding: '4px 8px',
+                        borderRadius: '6px',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        background: isUp ? 'var(--color-success-light)' : 'var(--color-danger-light)',
+                        color: isUp ? 'var(--color-success)' : 'var(--color-danger)',
+                    }}>
+                        {isUp ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
+                        {Math.abs(priceChange).toFixed(1)}%
                     </div>
                 </div>
 
-                <div className={styles.cardProbBar}>
-                    <div
-                        className={styles.probFill}
-                        style={{ width: `${prob}%` }}
-                    />
+                {/* Progress bar */}
+                <div style={{
+                    height: '6px',
+                    background: 'var(--bg-input)',
+                    borderRadius: '999px',
+                    overflow: 'hidden',
+                    marginBottom: '8px',
+                }}>
+                    <div style={{
+                        height: '100%',
+                        width: `${prob}%`,
+                        background: `linear-gradient(90deg, var(--color-success) 0%, #10B981 100%)`,
+                        borderRadius: '999px',
+                        transition: 'width 0.5s ease',
+                    }} />
                 </div>
 
                 {/* Graduation progress (only for sandbox phase) */}
                 {phase === "sandbox" && (
-                    <div className={styles.graduationProgress}>
-                        <div className={styles.graduationProgressBar}>
-                            <div
-                                className={styles.graduationProgressFill}
-                                style={{ width: `${volumeProgress}%` }}
-                            />
+                    <div style={{
+                        marginTop: '8px',
+                        padding: '8px',
+                        background: 'var(--bg-input)',
+                        borderRadius: '8px',
+                    }}>
+                        <div style={{
+                            height: '4px',
+                            background: 'var(--border-subtle)',
+                            borderRadius: '999px',
+                            overflow: 'hidden',
+                            marginBottom: '6px',
+                        }}>
+                            <div style={{
+                                height: '100%',
+                                width: `${volumeProgress}%`,
+                                background: 'linear-gradient(90deg, #3B82F6 0%, #1D4ED8 100%)',
+                                transition: 'width 0.3s ease',
+                            }} />
                         </div>
-                        <span className={styles.graduationProgressText}>
-                            <TrendingUp size={10} />
-                            ${volume.toFixed(0)} / ${GRADUATION_VOLUME_THRESHOLD}
-                        </span>
+                        <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            fontSize: '11px',
+                            color: 'var(--text-secondary)',
+                        }}>
+                            <TrendingUp size={10} style={{ color: '#3B82F6' }} />
+                            ${volume.toFixed(0)} / ${GRADUATION_VOLUME_THRESHOLD}  to graduate
+                        </div>
                     </div>
                 )}
 
-                <div className="flex-between" style={{ marginTop: "var(--space-2)" }}>
-                    <span className={styles.cardProb}>{prob}% Chance</span>
-                    <span className={styles.cardVol}>{vol} Vol</span>
+                {/* Footer with Add to Parlay */}
+                <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    marginTop: 'auto',
+                    paddingTop: '8px',
+                }}>
+                    <span style={{
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        color: 'var(--color-primary)',
+                    }}>
+                        {prob}% Chance
+                    </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{
+                            fontSize: '12px',
+                            color: 'var(--text-muted)',
+                        }}>
+                            {vol} Vol
+                        </span>
+                        {/* Add to Parlay button */}
+                        <button
+                            onClick={(e) => handleAddToParlay(e, "YES")}
+                            disabled={isInParlay || !canAddMore}
+                            style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                padding: '4px 8px',
+                                fontSize: '10px',
+                                fontWeight: 600,
+                                borderRadius: '6px',
+                                border: 'none',
+                                cursor: isInParlay || !canAddMore ? 'not-allowed' : 'pointer',
+                                background: isInParlay ? '#E0E7FF' : 'linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%)',
+                                color: isInParlay ? '#4F46E5' : 'white',
+                                opacity: !canAddMore && !isInParlay ? 0.5 : 1,
+                                transition: 'all 0.2s',
+                            }}
+                        >
+                            <Layers size={10} />
+                            {isInParlay ? 'In Parlay' : '+Parlay'}
+                        </button>
+                    </div>
                 </div>
             </div>
         </Link>
     );
 }
+

@@ -656,8 +656,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             return;
         }
 
-        if (legs.length !== 2) {
-            alert("Only 2-leg parlays supported for now");
+        if (legs.length < 2 || legs.length > 5) {
+            alert("Parlays require 2-5 legs");
+            return;
+        }
+
+        // Check for duplicate markets
+        const marketIds = legs.map(l => l.marketId);
+        if (new Set(marketIds).size !== marketIds.length) {
+            alert("Cannot add the same market twice to a parlay");
             return;
         }
 
@@ -774,26 +781,47 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
                 const newParlays = user.parlays.map(parlay => {
                     if (parlay.status !== "open") return parlay;
-                    const hasLeg = parlay.legs.find(l => l.marketId === marketId);
-                    if (!hasLeg) return parlay;
 
-                    if (hasLeg.outcomeId !== winningOutcomeId) {
+                    // Check if any leg in this parlay matches the resolved market
+                    const matchingLeg = parlay.legs.find(l => l.marketId === marketId);
+                    if (!matchingLeg) return parlay;
+
+                    // If the matching leg lost, the whole parlay loses
+                    if (matchingLeg.outcomeId !== winningOutcomeId) {
                         return { ...parlay, status: "lost" as const };
                     }
 
-                    const otherLeg = parlay.legs.find(l => l.marketId !== marketId);
-                    if (!otherLeg) return parlay;
+                    // Check all other legs to see if parlay can be resolved
+                    const otherLegs = parlay.legs.filter(l => l.marketId !== marketId);
 
-                    const otherMarket = markets.find(m => m.id === otherLeg.marketId);
-                    if (otherMarket?.status === "resolved") {
-                        if (otherMarket.resolutionResult === otherLeg.outcomeId) {
-                            newBalance += parlay.potentialPayout;
-                            return { ...parlay, status: "won" as const };
-                        } else {
-                            return { ...parlay, status: "lost" as const };
+                    // Check if all other legs are resolved and won
+                    let allOthersWon = true;
+                    let anyOtherPending = false;
+
+                    for (const otherLeg of otherLegs) {
+                        const otherMarket = markets.find(m => m.id === otherLeg.marketId);
+                        if (!otherMarket || otherMarket.status !== "resolved") {
+                            anyOtherPending = true;
+                            break;
+                        }
+                        if (otherMarket.resolutionResult !== otherLeg.outcomeId) {
+                            allOthersWon = false;
+                            break;
                         }
                     }
-                    return parlay;
+
+                    // If any leg is still pending, parlay stays open
+                    if (anyOtherPending) {
+                        return parlay;
+                    }
+
+                    // All legs resolved - determine final outcome
+                    if (allOthersWon) {
+                        newBalance += parlay.potentialPayout;
+                        return { ...parlay, status: "won" as const };
+                    } else {
+                        return { ...parlay, status: "lost" as const };
+                    }
                 });
 
                 let newHistory = user.history;

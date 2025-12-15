@@ -4,6 +4,7 @@ import "./globals.css";
 import AppLayout from "@/components/layout/AppLayout";
 import { StoreProvider } from "@/lib/store";
 import { AuthProvider } from "@/context/AuthContext";
+import { ParlayProvider } from "@/context/ParlayContext";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -29,9 +30,11 @@ export default function RootLayout({
     <html lang="en">
       <body className={`${inter.variable} ${playfair.variable}`} suppressHydrationWarning>
         <AuthProvider>
-          <StoreProvider>
-            <AppLayout>{children}</AppLayout>
-          </StoreProvider>
+          <ParlayProvider>
+            <StoreProvider>
+              <AppLayout>{children}</AppLayout>
+            </StoreProvider>
+          </ParlayProvider>
         </AuthProvider>
       </body>
     </html>

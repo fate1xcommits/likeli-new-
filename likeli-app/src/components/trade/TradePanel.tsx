@@ -213,24 +213,29 @@ export default function TradePanel({ mode, market, onOrderPlaced, currentPrice =
     };
 
     return (
-        <div className="flex flex-col h-full bg-[var(--bg-panel)] border-l border-[var(--border-subtle)]">
-            {/* Header */}
-            <div className="p-4 border-b border-[var(--border-subtle)] flex items-center justify-between bg-[var(--bg-panel-hover)]">
-                <div className="flex items-center gap-2">
-                    <TrendingUp size={16} className="text-[var(--color-primary)]" />
-                    <span className="font-bold text-sm text-[var(--text-main)]">Trade</span>
+        <div className="flex flex-col h-full bg-gradient-to-b from-[var(--bg-panel)] to-[var(--bg-page)] border-l border-[var(--border-subtle)]">
+            {/* Header with glassmorphism */}
+            <div className="p-4 border-b border-[var(--border-subtle)] flex items-center justify-between bg-[var(--bg-glass)] backdrop-blur-md">
+                <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[var(--color-primary)] to-[#FF6B6B] flex items-center justify-center shadow-lg">
+                        <TrendingUp size={16} className="text-white" />
+                    </div>
+                    <div>
+                        <span className="font-bold text-sm text-[var(--text-main)]">Trade</span>
+                        <div className="text-[10px] text-[var(--text-muted)]">Market Order</div>
+                    </div>
                 </div>
             </div>
 
             <div className="p-4 flex-1 flex flex-col gap-6 overflow-y-auto custom-scrollbar">
-                {/* Buy / Sell Tabs */}
-                <div className="flex p-1 bg-[var(--bg-input)] rounded-lg border border-[var(--border-subtle)]">
+                {/* Buy / Sell Tabs with gradient active state */}
+                <div className="flex p-1 bg-[var(--bg-input)] rounded-xl border border-[var(--border-subtle)] shadow-inner">
                     <button
                         className={clsx(
-                            "flex-1 py-2 text-sm font-bold rounded transition-all",
+                            "flex-1 py-3 text-sm font-bold rounded-lg transition-all duration-200",
                             tradeSide === "BUY"
-                                ? "bg-[var(--color-success)] text-white shadow-sm"
-                                : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
+                                ? "bg-gradient-to-r from-[var(--color-success)] to-emerald-500 text-white shadow-lg shadow-emerald-500/25"
+                                : "text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-panel-hover)]"
                         )}
                         onClick={() => { setTradeSide("BUY"); setAmount(""); }}
                     >
@@ -238,10 +243,10 @@ export default function TradePanel({ mode, market, onOrderPlaced, currentPrice =
                     </button>
                     <button
                         className={clsx(
-                            "flex-1 py-2 text-sm font-bold rounded transition-all",
+                            "flex-1 py-3 text-sm font-bold rounded-lg transition-all duration-200",
                             tradeSide === "SELL"
-                                ? "bg-[var(--color-danger)] text-white shadow-sm"
-                                : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
+                                ? "bg-gradient-to-r from-[var(--color-danger)] to-red-500 text-white shadow-lg shadow-red-500/25"
+                                : "text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-panel-hover)]"
                         )}
                         onClick={() => { setTradeSide("SELL"); setAmount(""); }}
                     >
@@ -249,36 +254,36 @@ export default function TradePanel({ mode, market, onOrderPlaced, currentPrice =
                     </button>
                 </div>
 
-                {/* Outcome Toggles */}
-                <div className="flex gap-2">
+                {/* Outcome Toggles with enhanced cards */}
+                <div className="flex gap-3">
                     <button
                         className={clsx(
-                            "flex-1 p-3 rounded-lg transition-all flex flex-col items-center justify-center gap-1 border",
+                            "flex-1 p-4 rounded-xl transition-all duration-200 flex flex-col items-center justify-center gap-2 border-2",
                             outcomeId === "yes"
-                                ? "bg-[var(--color-success)]/10 border-[var(--color-success)] shadow-sm"
-                                : "bg-[var(--bg-input)] border-[var(--border-subtle)] hover:bg-[var(--bg-panel-hover)]"
+                                ? "bg-gradient-to-br from-emerald-50 to-emerald-100 border-emerald-400 shadow-lg shadow-emerald-500/20"
+                                : "bg-[var(--bg-input)] border-transparent hover:border-[var(--border-active)] hover:shadow-md"
                         )}
                         onClick={() => setOutcomeId("yes")}
                     >
-                        <span className={clsx("text-xs font-bold", outcomeId === "yes" ? "text-[var(--color-success)]" : "text-[var(--text-muted)]")}>YES</span>
-                        <span className="text-[10px] text-[var(--text-secondary)] mt-1">{(yesPriceState * 100).toFixed(2)}¢</span>
+                        <span className={clsx("text-sm font-bold", outcomeId === "yes" ? "text-emerald-600" : "text-[var(--text-muted)]")}>YES</span>
+                        <span className={clsx("text-lg font-mono font-bold", outcomeId === "yes" ? "text-emerald-700" : "text-[var(--text-secondary)]")}>{(yesPriceState * 100).toFixed(0)}¢</span>
                         {tradeSide === "SELL" && (
-                            <span className="text-[9px] text-gray-400">{yesShares.toFixed(1)} shares</span>
+                            <span className="text-[10px] text-gray-400">{yesShares.toFixed(1)} shares</span>
                         )}
                     </button>
                     <button
                         className={clsx(
-                            "flex-1 p-3 rounded-lg transition-all flex flex-col items-center justify-center gap-1 border",
+                            "flex-1 p-4 rounded-xl transition-all duration-200 flex flex-col items-center justify-center gap-2 border-2",
                             outcomeId === "no"
-                                ? "bg-[var(--color-danger)]/10 border-[var(--color-danger)] shadow-sm"
-                                : "bg-[var(--bg-input)] border-[var(--border-subtle)] hover:bg-[var(--bg-panel-hover)]"
+                                ? "bg-gradient-to-br from-red-50 to-red-100 border-red-400 shadow-lg shadow-red-500/20"
+                                : "bg-[var(--bg-input)] border-transparent hover:border-[var(--border-active)] hover:shadow-md"
                         )}
                         onClick={() => setOutcomeId("no")}
                     >
-                        <span className={clsx("text-xs font-bold", outcomeId === "no" ? "text-[var(--color-danger)]" : "text-[var(--text-muted)]")}>NO</span>
-                        <span className="text-[10px] text-[var(--text-secondary)] mt-1">{(noPriceState * 100).toFixed(2)}¢</span>
+                        <span className={clsx("text-sm font-bold", outcomeId === "no" ? "text-red-600" : "text-[var(--text-muted)]")}>NO</span>
+                        <span className={clsx("text-lg font-mono font-bold", outcomeId === "no" ? "text-red-700" : "text-[var(--text-secondary)]")}>{(noPriceState * 100).toFixed(0)}¢</span>
                         {tradeSide === "SELL" && (
-                            <span className="text-[9px] text-gray-400">{noShares.toFixed(1)} shares</span>
+                            <span className="text-[10px] text-gray-400">{noShares.toFixed(1)} shares</span>
                         )}
                     </button>
                 </div>
@@ -344,7 +349,7 @@ export default function TradePanel({ mode, market, onOrderPlaced, currentPrice =
                     </div>
                 </div>
 
-                {/* Submit Button */}
+                {/* Submit Button with gradient and animation */}
                 {(() => {
                     const canSell = tradeSide === "SELL"
                         ? (outcomeId === "yes" ? yesShares > 0 : noShares > 0)
@@ -353,19 +358,19 @@ export default function TradePanel({ mode, market, onOrderPlaced, currentPrice =
                     return (
                         <button
                             className={clsx(
-                                "w-full p-4 rounded-xl font-bold text-white shadow-lg transition-all transform",
+                                "w-full p-4 rounded-xl font-bold text-white shadow-xl transition-all duration-200 transform",
                                 isDisabled
                                     ? "bg-gray-300 cursor-not-allowed opacity-60"
                                     : tradeSide === "BUY"
-                                        ? "bg-[var(--color-success)] hover:opacity-90 shadow-emerald-900/10 active:scale-[0.98]"
-                                        : "bg-[var(--color-danger)] hover:opacity-90 shadow-red-900/10 active:scale-[0.98]"
+                                        ? "bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 shadow-emerald-500/30 hover:shadow-emerald-500/50 active:scale-[0.97]"
+                                        : "bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 shadow-red-500/30 hover:shadow-red-500/50 active:scale-[0.97]"
                             )}
                             onClick={handlePlaceOrder}
                             disabled={isDisabled}
                         >
                             {isDisabled
                                 ? `No ${outcomeId.toUpperCase()} shares to sell`
-                                : `${tradeSide} ${outcomeId.toUpperCase()} ${isLimit && limitPrice ? "@ " + limitPrice : (isLimit ? "" : "@ MKT")}`
+                                : `${tradeSide} ${outcomeId.toUpperCase()} ${isLimit && limitPrice ? "@ " + limitPrice : (isLimit ? "" : "@ Market")}`
                             }
                         </button>
                     );

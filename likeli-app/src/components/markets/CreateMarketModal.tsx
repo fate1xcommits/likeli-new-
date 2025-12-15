@@ -29,6 +29,40 @@ export default function CreateMarketModal({ onClose }: CreateMarketModalProps) {
     // Dependent = probabilities must sum to 100%, Independent = each answer is separate
     const [shouldAnswersSumToOne, setShouldAnswersSumToOne] = useState(true);
 
+    // Oracle configuration
+    const [useOracle, setUseOracle] = useState(false);
+    const [oracleType, setOracleType] = useState<'crypto_price' | 'sports_game'>('crypto_price');
+
+    // Crypto oracle fields
+    const [oracleAsset, setOracleAsset] = useState("bitcoin");
+    const [oracleTargetPrice, setOracleTargetPrice] = useState("");
+    const [oracleCondition, setOracleCondition] = useState<"gte" | "lte" | "gt" | "lt">("gte");
+
+    // Sports oracle fields
+    const [sportsLeague, setSportsLeague] = useState("nba");
+    const [teamToWin, setTeamToWin] = useState("");
+    const [homeTeam, setHomeTeam] = useState("");
+    const [awayTeam, setAwayTeam] = useState("");
+    const [gameDate, setGameDate] = useState("");
+
+    const SUPPORTED_ASSETS = [
+        { id: "bitcoin", label: "Bitcoin (BTC)" },
+        { id: "ethereum", label: "Ethereum (ETH)" },
+        { id: "solana", label: "Solana (SOL)" },
+        { id: "dogecoin", label: "Dogecoin (DOGE)" },
+        { id: "cardano", label: "Cardano (ADA)" },
+        { id: "ripple", label: "XRP" },
+    ];
+
+    const SUPPORTED_LEAGUES = [
+        { id: "nba", label: "🏀 NBA Basketball" },
+        { id: "nfl", label: "🏈 NFL Football" },
+        { id: "mlb", label: "⚾ MLB Baseball" },
+        { id: "nhl", label: "🏒 NHL Hockey" },
+        { id: "mls", label: "⚽ MLS Soccer" },
+        { id: "epl", label: "⚽ English Premier League" },
+    ];
+
     const addAnswer = () => {
         if (answers.length < MAX_ANSWERS) {
             setAnswers([...answers, ""]);
@@ -82,6 +116,37 @@ export default function CreateMarketModal({ onClose }: CreateMarketModalProps) {
             if (outcomeType === "MULTIPLE_CHOICE") {
                 body.answers = answers.filter(a => a.trim().length > 0);
                 body.shouldAnswersSumToOne = shouldAnswersSumToOne;
+            }
+
+            // Add oracle resolution source
+            if (useOracle) {
+                if (oracleType === 'crypto_price' && oracleTargetPrice) {
+                    const conditionLabels: Record<string, string> = {
+                        gte: "≥",
+                        lte: "≤",
+                        gt: ">",
+                        lt: "<"
+                    };
+                    body.resolutionSource = {
+                        type: "crypto_price",
+                        asset: oracleAsset,
+                        targetPrice: parseFloat(oracleTargetPrice),
+                        condition: oracleCondition,
+                        deadline: new Date(date).getTime(),
+                        description: `${oracleAsset.toUpperCase()} ${conditionLabels[oracleCondition]} $${parseFloat(oracleTargetPrice).toLocaleString()}`
+                    };
+                } else if (oracleType === 'sports_game' && teamToWin) {
+                    body.resolutionSource = {
+                        type: "sports_game",
+                        league: sportsLeague,
+                        teamToWin: teamToWin.toUpperCase(),
+                        homeTeam: homeTeam.toUpperCase() || undefined,
+                        awayTeam: awayTeam.toUpperCase() || undefined,
+                        gameDate: gameDate || undefined,
+                        deadline: new Date(date).getTime(),
+                        description: `${teamToWin.toUpperCase()} wins${homeTeam && awayTeam ? ` (${awayTeam.toUpperCase()} @ ${homeTeam.toUpperCase()})` : ''}`
+                    };
+                }
             }
 
             const res = await fetch("/api/manifold/markets", {
@@ -264,6 +329,229 @@ export default function CreateMarketModal({ onClose }: CreateMarketModalProps) {
                                 onChange={e => setRules(e.target.value)}
                             />
                         </div>
+
+                        {/* Oracle Configuration - Only for Binary markets */}
+                        {outcomeType === "BINARY" && (
+                            <div className={styles.field}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                                    <input
+                                        type="checkbox"
+                                        id="useOracle"
+                                        checked={useOracle}
+                                        onChange={e => setUseOracle(e.target.checked)}
+                                        style={{ width: '16px', height: '16px' }}
+                                    />
+                                    <label htmlFor="useOracle" className={styles.label} style={{ marginBottom: 0 }}>
+                                        🤖 Enable AI Oracle (Auto-Resolution)
+                                    </label>
+                                </div>
+
+                                {useOracle && (
+                                    <div style={{
+                                        padding: '12px',
+                                        backgroundColor: 'var(--bg-input)',
+                                        borderRadius: '8px',
+                                        marginTop: '8px'
+                                    }}>
+                                        {/* Oracle Type Toggle */}
+                                        <div style={{ marginBottom: '12px' }}>
+                                            <label style={{ fontSize: '11px', color: '#9ca3af', display: 'block', marginBottom: '4px' }}>
+                                                Oracle Type
+                                            </label>
+                                            <div style={{ display: 'flex', gap: '8px' }}>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setOracleType('crypto_price')}
+                                                    style={{
+                                                        flex: 1,
+                                                        padding: '8px',
+                                                        borderRadius: '6px',
+                                                        border: '1px solid',
+                                                        borderColor: oracleType === 'crypto_price' ? '#3b82f6' : 'var(--border-subtle)',
+                                                        backgroundColor: oracleType === 'crypto_price' ? 'rgba(59, 130, 246, 0.1)' : 'transparent',
+                                                        color: oracleType === 'crypto_price' ? '#3b82f6' : 'var(--text-secondary)',
+                                                        fontSize: '12px',
+                                                        fontWeight: 500,
+                                                        cursor: 'pointer'
+                                                    }}
+                                                >
+                                                    📈 Crypto Price
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setOracleType('sports_game')}
+                                                    style={{
+                                                        flex: 1,
+                                                        padding: '8px',
+                                                        borderRadius: '6px',
+                                                        border: '1px solid',
+                                                        borderColor: oracleType === 'sports_game' ? '#22c55e' : 'var(--border-subtle)',
+                                                        backgroundColor: oracleType === 'sports_game' ? 'rgba(34, 197, 94, 0.1)' : 'transparent',
+                                                        color: oracleType === 'sports_game' ? '#22c55e' : 'var(--text-secondary)',
+                                                        fontSize: '12px',
+                                                        fontWeight: 500,
+                                                        cursor: 'pointer'
+                                                    }}
+                                                >
+                                                    🏆 Sports Game
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        {/* Crypto Price Fields */}
+                                        {oracleType === 'crypto_price' && (
+                                            <>
+                                                <p style={{ fontSize: '11px', color: '#6b7280', marginBottom: '12px' }}>
+                                                    Resolves based on crypto price from CoinGecko.
+                                                </p>
+                                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
+                                                    <div>
+                                                        <label style={{ fontSize: '11px', color: '#9ca3af', display: 'block', marginBottom: '4px' }}>
+                                                            Asset
+                                                        </label>
+                                                        <select
+                                                            className={styles.select}
+                                                            value={oracleAsset}
+                                                            onChange={e => setOracleAsset(e.target.value)}
+                                                        >
+                                                            {SUPPORTED_ASSETS.map(a => (
+                                                                <option key={a.id} value={a.id}>{a.label}</option>
+                                                            ))}
+                                                        </select>
+                                                    </div>
+                                                    <div>
+                                                        <label style={{ fontSize: '11px', color: '#9ca3af', display: 'block', marginBottom: '4px' }}>
+                                                            Condition
+                                                        </label>
+                                                        <select
+                                                            className={styles.select}
+                                                            value={oracleCondition}
+                                                            onChange={e => setOracleCondition(e.target.value as any)}
+                                                        >
+                                                            <option value="gte">≥ Greater or Equal</option>
+                                                            <option value="gt">&gt; Greater Than</option>
+                                                            <option value="lte">≤ Less or Equal</option>
+                                                            <option value="lt">&lt; Less Than</option>
+                                                        </select>
+                                                    </div>
+                                                </div>
+                                                <div>
+                                                    <label style={{ fontSize: '11px', color: '#9ca3af', display: 'block', marginBottom: '4px' }}>
+                                                        Target Price (USD)
+                                                    </label>
+                                                    <input
+                                                        type="number"
+                                                        className={styles.input}
+                                                        placeholder="e.g. 100000"
+                                                        value={oracleTargetPrice}
+                                                        onChange={e => setOracleTargetPrice(e.target.value)}
+                                                    />
+                                                </div>
+                                                {oracleTargetPrice && (
+                                                    <div style={{
+                                                        marginTop: '8px',
+                                                        padding: '8px',
+                                                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                                                        borderRadius: '4px',
+                                                        fontSize: '12px',
+                                                        color: '#3b82f6'
+                                                    }}>
+                                                        Resolves YES if {oracleAsset.toUpperCase()} {oracleCondition === 'gte' ? '≥' : oracleCondition === 'lte' ? '≤' : oracleCondition === 'gt' ? '>' : '<'} ${parseFloat(oracleTargetPrice).toLocaleString()}
+                                                    </div>
+                                                )}
+                                            </>
+                                        )}
+
+                                        {/* Sports Game Fields */}
+                                        {oracleType === 'sports_game' && (
+                                            <>
+                                                <p style={{ fontSize: '11px', color: '#6b7280', marginBottom: '12px' }}>
+                                                    Resolves based on game result from ESPN.
+                                                </p>
+                                                <div style={{ marginBottom: '8px' }}>
+                                                    <label style={{ fontSize: '11px', color: '#9ca3af', display: 'block', marginBottom: '4px' }}>
+                                                        League
+                                                    </label>
+                                                    <select
+                                                        className={styles.select}
+                                                        value={sportsLeague}
+                                                        onChange={e => setSportsLeague(e.target.value)}
+                                                    >
+                                                        {SUPPORTED_LEAGUES.map(l => (
+                                                            <option key={l.id} value={l.id}>{l.label}</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
+                                                    <div>
+                                                        <label style={{ fontSize: '11px', color: '#9ca3af', display: 'block', marginBottom: '4px' }}>
+                                                            Home Team (abbrev)
+                                                        </label>
+                                                        <input
+                                                            type="text"
+                                                            className={styles.input}
+                                                            placeholder="e.g. LAL"
+                                                            value={homeTeam}
+                                                            onChange={e => setHomeTeam(e.target.value.toUpperCase())}
+                                                            maxLength={4}
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <label style={{ fontSize: '11px', color: '#9ca3af', display: 'block', marginBottom: '4px' }}>
+                                                            Away Team (abbrev)
+                                                        </label>
+                                                        <input
+                                                            type="text"
+                                                            className={styles.input}
+                                                            placeholder="e.g. GSW"
+                                                            value={awayTeam}
+                                                            onChange={e => setAwayTeam(e.target.value.toUpperCase())}
+                                                            maxLength={4}
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <div style={{ marginBottom: '8px' }}>
+                                                    <label style={{ fontSize: '11px', color: '#9ca3af', display: 'block', marginBottom: '4px' }}>
+                                                        Team to Win (for YES)
+                                                    </label>
+                                                    <input
+                                                        type="text"
+                                                        className={styles.input}
+                                                        placeholder="e.g. LAL"
+                                                        value={teamToWin}
+                                                        onChange={e => setTeamToWin(e.target.value.toUpperCase())}
+                                                        maxLength={4}
+                                                    />
+                                                </div>
+                                                <div style={{ marginBottom: '8px' }}>
+                                                    <label style={{ fontSize: '11px', color: '#9ca3af', display: 'block', marginBottom: '4px' }}>
+                                                        Game Date (optional)
+                                                    </label>
+                                                    <input
+                                                        type="date"
+                                                        className={styles.input}
+                                                        value={gameDate}
+                                                        onChange={e => setGameDate(e.target.value)}
+                                                    />
+                                                </div>
+                                                {teamToWin && (
+                                                    <div style={{
+                                                        marginTop: '8px',
+                                                        padding: '8px',
+                                                        backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                                                        borderRadius: '4px',
+                                                        fontSize: '12px',
+                                                        color: '#22c55e'
+                                                    }}>
+                                                        Resolves YES if {teamToWin} wins{homeTeam && awayTeam ? ` (${awayTeam} @ ${homeTeam})` : ''}
+                                                    </div>
+                                                )}
+                                            </>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        )}
 
                         {/* Liquidity Section */}
                         <div className={styles.field}>

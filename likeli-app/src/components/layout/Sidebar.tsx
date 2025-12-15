@@ -24,11 +24,7 @@ const NAV_ITEMS = [
   { label: "Settings", href: "/settings", icon: Settings },
 ];
 
-interface SidebarProps {
-  onOpenParlay?: () => void;
-}
-
-export default function Sidebar({ onOpenParlay }: SidebarProps) {
+export default function Sidebar() {
   const pathname = usePathname();
   const { walletAddress, username, disconnect, openWalletModal } = useAuth();
 

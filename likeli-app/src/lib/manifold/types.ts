@@ -66,6 +66,42 @@ export interface Contract {
     phase: Phase;
     graduationStartTime?: number;
     category?: string;
+
+    // ============================================
+    // ORACLE FIELDS
+    // ============================================
+
+    // Resolution source configuration
+    resolutionSource?: {
+        type: 'crypto_price' | 'api' | 'manual';
+        asset?: string;          // e.g., "bitcoin"
+        targetPrice?: number;    // e.g., 100000
+        condition?: 'gte' | 'lte' | 'gt' | 'lt' | 'eq';
+        url?: string;            // For API type
+        deadline: number;        // When to resolve
+        description?: string;    // Human-readable criteria
+    };
+
+    // Oracle proposal
+    oracleProposal?: {
+        resolution: Resolution;
+        proposedAt: number;
+        proposedBy: 'AI' | string;
+        reasoning: string;
+        sourceSnapshot: string;
+        challengeWindowEnd: number;
+    };
+
+    // Challenge against proposal
+    oracleChallenge?: {
+        challengerId: string;
+        bondAmount: number;
+        reason: string;
+        challengedAt: number;
+    };
+
+    // Oracle status
+    oracleStatus?: 'UNRESOLVED' | 'PENDING' | 'PROVISIONAL' | 'CHALLENGED' | 'FINALIZED';
 }
 
 export interface Answer {
