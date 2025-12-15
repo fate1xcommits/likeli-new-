@@ -5,15 +5,16 @@ import { addObjects } from './util/object'
 
 export const FEE_START_TIME = 1713292320000
 
-const TAKER_FEE_CONSTANT = 0
+// Set to 0.001 to target ~0.05% taker fee at mid-price (50%); smaller near 0%/100%.
+const TAKER_FEE_CONSTANT = 0.001
 export const getTakerFee = (shares: number, prob: number) => {
     return TAKER_FEE_CONSTANT * prob * (1 - prob) * shares
 }
 
 export const getFeesSplit = (totalFees: number) => {
     return {
-        creatorFee: 0,
-        platformFee: totalFees,
+        creatorFee: totalFees * 0.25,
+        platformFee: totalFees * 0.75,
         liquidityFee: 0,
     }
 }

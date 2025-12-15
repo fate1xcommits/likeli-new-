@@ -2,7 +2,7 @@
 // Limit Order API - Manifold Match
 
 import { NextResponse } from "next/server";
-import { placeLimitOrder, cancelUserOrder, getUserOpenOrders } from "@/lib/manifold";
+import { placeLimitOrder, cancelUserOrder, getUserOpenOrders, getActiveLimitOrders, getOrderBookLevels } from "@/lib/manifold";
 
 /**
  * POST /api/manifold/limit-order - Place a limit order
@@ -41,11 +41,19 @@ export async function POST(req: Request) {
 
 /**
  * GET /api/manifold/limit-order?userId=xxx - Get user's open orders
+ * GET /api/manifold/limit-order?contractId=xxx - Get active orders for contract
  */
 export async function GET(req: Request) {
     try {
         const url = new URL(req.url);
         const userId = url.searchParams.get('userId');
+        const contractId = url.searchParams.get('contractId');
+
+        if (contractId) {
+            const orders = getActiveLimitOrders(contractId);
+            const orderbook = getOrderBookLevels(contractId);
+            return NextResponse.json({ orders, orderbook });
+        }
 
         if (!userId) {
             return NextResponse.json({ error: 'userId required' }, { status: 400 });

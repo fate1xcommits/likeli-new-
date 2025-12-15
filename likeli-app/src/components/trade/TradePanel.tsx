@@ -11,9 +11,10 @@ interface TradePanelProps {
     onOrderPlaced?: () => void;
     currentPrice?: number; // Current YES price (0-1)
     bestAsk?: number;      // Best Ask price for YES (to estimate Buy shares)
+    onOutcomeChange?: (outcome: 'yes' | 'no') => void;
 }
 
-export default function TradePanel({ mode, market, onOrderPlaced, currentPrice = 0.5, bestAsk }: TradePanelProps) {
+export default function TradePanel({ mode, market, onOrderPlaced, currentPrice = 0.5, bestAsk, onOutcomeChange }: TradePanelProps) {
     // Local state for form
     const [tradeSide, setTradeSide] = useState<"BUY" | "SELL">("BUY");
     const [outcomeId, setOutcomeId] = useState<"yes" | "no">("yes");
@@ -22,7 +23,11 @@ export default function TradePanel({ mode, market, onOrderPlaced, currentPrice =
     const [isLimit, setIsLimit] = useState(false);
 
     // Dynamic Prices (Sandbox support)
-    const isSandbox = market?.phase === "sandbox_curve";
+    const marketPhase = market?.phase;
+    const isGraduating = marketPhase === "graduating";
+    const isManifoldMarket = market?.mechanism?.startsWith('cpmm') || market?.pool !== undefined;
+    const isMainManifold = isManifoldMarket && marketPhase === "main";
+    const limitDisabled = isManifoldMarket && !isMainManifold;
     const [yesPriceState, setYesPriceState] = useState(market?.currentPrices?.probYes ?? currentPrice);
     const [noPriceState, setNoPriceState] = useState(market?.currentPrices?.probNo ?? (1 - currentPrice));
 
@@ -55,23 +60,26 @@ export default function TradePanel({ mode, market, onOrderPlaced, currentPrice =
         }
     }, [market?.id, tradeSide]);
 
+    useEffect(() => {
+        if (limitDisabled && isLimit) {
+            setIsLimit(false);
+            setLimitPrice("");
+        }
+    }, [limitDisabled, isLimit]);
+
+    const tradingDisabled = isGraduating;
 
     // Display Price
     const displayPrice = outcomeId === 'yes' ? yesPriceState : noPriceState;
 
     const handlePlaceOrder = async () => {
-        if (!amount || isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) {
-            alert("Please enter a valid amount");
+        if (isGraduating) {
+            alert("Trading is paused while this market is graduating.");
             return;
         }
 
-        // Check if this is a Manifold market (has mechanism field or pool field)
-        // Manifold markets have: mechanism = 'cpmm-1' or pool = { YES, NO }
-        const isManifoldMarket = market?.mechanism?.startsWith('cpmm') || market?.pool !== undefined;
-
-        // Sandbox Checks
-        if (isManifoldMarket && isLimit) {
-            alert("Limit orders not supported in sandbox.");
+        if (!amount || isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) {
+            alert("Please enter a valid amount");
             return;
         }
 
@@ -79,8 +87,16 @@ export default function TradePanel({ mode, market, onOrderPlaced, currentPrice =
         const qtyNum = parseFloat(amount);
 
         // Validation for Limit
-        if (!isManifoldMarket && isLimit && (isNaN(priceNum) || priceNum <= 0 || priceNum >= 1)) {
+        if (isLimit && (isNaN(priceNum) || priceNum <= 0 || priceNum >= 1)) {
             alert("Please enter a valid limit price (0.01 - 0.99)");
+            return;
+        }
+        if (isLimit && isManifoldMarket && !isMainManifold) {
+            alert("Limit orders are only available on Main markets.");
+            return;
+        }
+        if (isLimit && isManifoldMarket && tradeSide === "SELL") {
+            alert("Limit sell orders aren't supported on Manifold markets yet. Please use a market sell.");
             return;
         }
 
@@ -94,7 +110,16 @@ export default function TradePanel({ mode, market, onOrderPlaced, currentPrice =
 
         if (isManifoldMarket) {
             // Use new Manifold API
-            if (tradeSide === "BUY") {
+            if (isLimit && isMainManifold) {
+                endpoint = '/api/manifold/limit-order';
+                payload = {
+                    contractId: market.id,
+                    amount: qtyNum,
+                    outcome: outcomeId.toUpperCase(),
+                    userId: "demo-user",
+                    limitProb: priceNum
+                };
+            } else if (tradeSide === "BUY") {
                 endpoint = '/api/manifold/bet';
                 payload = {
                     contractId: market.id,
@@ -159,14 +184,16 @@ export default function TradePanel({ mode, market, onOrderPlaced, currentPrice =
 
             // Success
             setAmount("");
+            if (isLimit) {
+                setLimitPrice("");
+                setIsLimit(false);
+            }
 
             // Update prices from Manifold response
-            if (json.probAfter !== undefined) {
-                setYesPriceState(json.probAfter);
-                setNoPriceState(1 - json.probAfter);
-            } else if (json.currentProbability !== undefined) {
-                setYesPriceState(json.currentProbability);
-                setNoPriceState(1 - json.currentProbability);
+            const probabilityUpdate = json.currentProbability ?? json.probAfter ?? json.order?.probAfter;
+            if (probabilityUpdate !== undefined) {
+                setYesPriceState(probabilityUpdate);
+                setNoPriceState(1 - probabilityUpdate);
             } else if (json.currentPrices) {
                 setYesPriceState(json.currentPrices.probYes);
                 setNoPriceState(json.currentPrices.probNo);
@@ -222,12 +249,19 @@ export default function TradePanel({ mode, market, onOrderPlaced, currentPrice =
                     </div>
                     <div>
                         <span className="font-bold text-sm text-[var(--text-main)]">Trade</span>
-                        <div className="text-[10px] text-[var(--text-muted)]">Market Order</div>
+                        <div className="text-[10px] text-[var(--text-muted)]">
+                            {isGraduating ? "Graduating (trading paused)" : isLimit ? "Limit Order" : "Market Order"}
+                        </div>
                     </div>
                 </div>
             </div>
 
             <div className="p-4 flex-1 flex flex-col gap-6 overflow-y-auto custom-scrollbar">
+                {isGraduating && (
+                    <div className="p-3 rounded-lg bg-[var(--bg-input)] border border-[var(--border-subtle)] text-[12px] text-[var(--text-secondary)]">
+                        This market is graduating right now. Trading is paused until it reaches Main.
+                    </div>
+                )}
                 {/* Buy / Sell Tabs with gradient active state */}
                 <div className="flex p-1 bg-[var(--bg-input)] rounded-xl border border-[var(--border-subtle)] shadow-inner">
                     <button
@@ -238,6 +272,7 @@ export default function TradePanel({ mode, market, onOrderPlaced, currentPrice =
                                 : "text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-panel-hover)]"
                         )}
                         onClick={() => { setTradeSide("BUY"); setAmount(""); }}
+                        disabled={tradingDisabled}
                     >
                         Buy
                     </button>
@@ -249,6 +284,7 @@ export default function TradePanel({ mode, market, onOrderPlaced, currentPrice =
                                 : "text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-panel-hover)]"
                         )}
                         onClick={() => { setTradeSide("SELL"); setAmount(""); }}
+                        disabled={tradingDisabled}
                     >
                         Sell
                     </button>
@@ -263,7 +299,7 @@ export default function TradePanel({ mode, market, onOrderPlaced, currentPrice =
                                 ? "bg-gradient-to-br from-emerald-50 to-emerald-100 border-emerald-400 shadow-lg shadow-emerald-500/20"
                                 : "bg-[var(--bg-input)] border-transparent hover:border-[var(--border-active)] hover:shadow-md"
                         )}
-                        onClick={() => setOutcomeId("yes")}
+                        onClick={() => { setOutcomeId("yes"); onOutcomeChange?.("yes"); }}
                     >
                         <span className={clsx("text-sm font-bold", outcomeId === "yes" ? "text-emerald-600" : "text-[var(--text-muted)]")}>YES</span>
                         <span className={clsx("text-lg font-mono font-bold", outcomeId === "yes" ? "text-emerald-700" : "text-[var(--text-secondary)]")}>{(yesPriceState * 100).toFixed(0)}¢</span>
@@ -278,7 +314,7 @@ export default function TradePanel({ mode, market, onOrderPlaced, currentPrice =
                                 ? "bg-gradient-to-br from-red-50 to-red-100 border-red-400 shadow-lg shadow-red-500/20"
                                 : "bg-[var(--bg-input)] border-transparent hover:border-[var(--border-active)] hover:shadow-md"
                         )}
-                        onClick={() => setOutcomeId("no")}
+                        onClick={() => { setOutcomeId("no"); onOutcomeChange?.("no"); }}
                     >
                         <span className={clsx("text-sm font-bold", outcomeId === "no" ? "text-red-600" : "text-[var(--text-muted)]")}>NO</span>
                         <span className={clsx("text-lg font-mono font-bold", outcomeId === "no" ? "text-red-700" : "text-[var(--text-secondary)]")}>{(noPriceState * 100).toFixed(0)}¢</span>
@@ -294,10 +330,13 @@ export default function TradePanel({ mode, market, onOrderPlaced, currentPrice =
                         <input
                             type="checkbox"
                             checked={isLimit}
+                            disabled={limitDisabled || tradingDisabled}
                             onChange={(e) => setIsLimit(e.target.checked)}
                             className="rounded border-[var(--border-subtle)] bg-[var(--bg-input)] text-[var(--color-primary)] focus:ring-0"
                         />
-                        Limit Order
+                        <span>
+                            Limit Order {limitDisabled ? "(Main markets only)" : ""}
+                        </span>
                     </label>
                 )}
 
@@ -315,6 +354,7 @@ export default function TradePanel({ mode, market, onOrderPlaced, currentPrice =
                             className="w-full bg-[var(--bg-input)] border border-[var(--border-subtle)] rounded-lg p-3 text-[var(--text-main)] font-mono placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--color-primary)] transition-all pl-3"
                             placeholder="0.50"
                             value={limitPrice}
+                            disabled={tradingDisabled}
                             onChange={(e) => setLimitPrice(e.target.value)}
                         />
                     </div>
@@ -343,9 +383,10 @@ export default function TradePanel({ mode, market, onOrderPlaced, currentPrice =
                             )}
                             placeholder="0.00"
                             value={amount}
+                            disabled={tradingDisabled}
                             onChange={(e) => setAmount(e.target.value)}
                         />
-                        <button onClick={setMax} className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] bg-[var(--color-primary)]/10 text-[var(--color-primary)] px-1 rounded">MAX</button>
+                        <button onClick={setMax} disabled={tradingDisabled} className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] bg-[var(--color-primary)]/10 text-[var(--color-primary)] px-1 rounded disabled:opacity-50">MAX</button>
                     </div>
                 </div>
 
@@ -354,7 +395,7 @@ export default function TradePanel({ mode, market, onOrderPlaced, currentPrice =
                     const canSell = tradeSide === "SELL"
                         ? (outcomeId === "yes" ? yesShares > 0 : noShares > 0)
                         : true;
-                    const isDisabled = tradeSide === "SELL" && !canSell;
+                    const isDisabled = tradingDisabled || (tradeSide === "SELL" && !canSell);
                     return (
                         <button
                             className={clsx(
@@ -383,7 +424,7 @@ export default function TradePanel({ mode, market, onOrderPlaced, currentPrice =
                     <h3 className="text-xs font-bold text-[var(--text-secondary)] uppercase">My Activity</h3>
                 </div>
                 <div className="max-h-[200px] overflow-y-auto custom-scrollbar">
-                    <MyBets marketId={market.id} />
+                    <MyBets marketId={market.id} isManifold={isManifoldMarket} />
                 </div>
             </div>
         </div>

@@ -3,6 +3,7 @@
 
 import { Pool, Bet, Answer, CPMM_MIN_POOL_QTY } from './types';
 import { calculateCpmmSale, getCpmmProbability, generateId } from './cpmm';
+import { calculateCpmmSale as calculateCpmmSaleWithLimits } from './calculate-cpmm';
 import {
     getContract,
     saveContract,
@@ -13,6 +14,7 @@ import {
     addPricePoint,
     getOrCreateUser
 } from './store';
+import { checkAndFillLimitOrders, getActiveLimitOrders, getBalanceByUserId, applyMakerFills, cancelOrders } from './limit-orders';
 
 // ============================================
 // SELL SHARES - MAIN FUNCTION
@@ -70,6 +72,88 @@ export function sellShares(params: SellSharesParams): SellSharesResult {
 
     if (contract.resolution) {
         return { success: false, error: 'Market already resolved' };
+    }
+
+    // MAIN MARKETS (BINARY): limit-order aware sale
+    if (contract.phase === 'main' && contract.outcomeType === 'BINARY') {
+        const unfilled = getActiveLimitOrders(contractId);
+        const balanceByUserId = getBalanceByUserId(unfilled);
+
+        const state = {
+            pool,
+            p: contract.p ?? 0.5,
+            collectedFees: { creatorFee: 0, platformFee: 0, liquidityFee: 0 }
+        };
+
+        const { saleValue, cpmmState, makers, ordersToCancel } = calculateCpmmSaleWithLimits(
+            state,
+            sharesToSell,
+            outcome,
+            unfilled,
+            balanceByUserId
+        );
+
+        const payout = saleValue;
+        const probBefore = getCpmmProbability(pool, contract.p ?? 0.5);
+        const probAfter = getCpmmProbability(cpmmState.pool as unknown as Pool, cpmmState.p);
+
+        if (payout <= 0) {
+            return { success: false, error: 'Payout must be positive' };
+        }
+
+        const betId = generateId();
+        const now = Date.now();
+
+        const bet: Bet = {
+            id: betId,
+            contractId,
+            userId,
+            amount: -payout,
+            shares: -sharesToSell,
+            outcome,
+            probBefore,
+            probAfter,
+            answerId,
+            isRedemption: false,
+            isFilled: true,
+            isCancelled: false,
+            createdTime: now
+        };
+
+        updateUserBalance(userId, payout);
+        addBet(contractId, bet);
+
+        contract.pool = cpmmState.pool as unknown as Pool;
+        contract.p = cpmmState.p;
+        contract.volume += payout;
+        contract.lastBetTime = now;
+        contract.lastUpdatedTime = now;
+        saveContract(contract);
+
+        // Update user position
+        if (outcome === 'YES') {
+            metric.totalSharesYes -= sharesToSell;
+            metric.hasYesShares = metric.totalSharesYes > 0;
+        } else {
+            metric.totalSharesNo -= sharesToSell;
+            metric.hasNoShares = metric.totalSharesNo > 0;
+        }
+        updateMetric(metric);
+
+        applyMakerFills(betId, makers);
+        cancelOrders(ordersToCancel);
+
+        addPricePoint(contractId, probAfter);
+        checkAndFillLimitOrders(contractId);
+
+        return {
+            success: true,
+            bet,
+            payout,
+            probBefore,
+            probAfter,
+            newBalance: getOrCreateUser(userId).balance
+        };
     }
 
     // 3. Get pool (answer or contract)
@@ -158,6 +242,10 @@ export function sellShares(params: SellSharesParams): SellSharesResult {
 
     // 11. Add price point
     addPricePoint(contractId, probAfter);
+    // Fill any limit orders that are now triggered by this sale
+    if (contract.outcomeType === 'BINARY') {
+        checkAndFillLimitOrders(contractId);
+    }
 
     // 12. Return result
     return {

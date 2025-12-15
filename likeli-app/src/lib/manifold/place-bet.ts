@@ -4,6 +4,7 @@
 import { Pool, Bet, Contract, Answer, CPMM_MIN_POOL_QTY } from './types';
 import { calculateCpmmPurchase, getCpmmProbability, generateId } from './cpmm';
 import { calculateCpmmMultiArbitrageBet } from './calculate-cpmm-arbitrage';
+import { computeFills } from './calculate-cpmm';
 import { noFees } from './fees';
 import {
     getContract,
@@ -18,6 +19,8 @@ import {
 } from './store';
 import { executeRedemption, RedeemResult } from './redeem';
 import { checkAndPayUniqueBettorBonus } from './bonuses';
+import { checkAndFillLimitOrders } from './limit-orders';
+import { getActiveLimitOrders, getBalanceByUserId, applyMakerFills, cancelOrders } from './limit-orders';
 
 // ============================================
 // PLACE BET - MAIN FUNCTION
@@ -69,6 +72,85 @@ export function placeBet(params: PlaceBetParams): PlaceBetResult {
 
     if (contract.resolution) {
         return { success: false, error: 'Market already resolved' };
+    }
+
+    // MAIN MARKETS (BINARY): full limit-order matching
+    if (contract.phase === 'main' && contract.outcomeType === 'BINARY') {
+        const unfilled = getActiveLimitOrders(contractId);
+        const balanceByUserId = getBalanceByUserId(unfilled);
+
+        const state = {
+            pool: contract.pool,
+            p: contract.p ?? 0.5,
+            collectedFees: noFees
+        };
+
+        const { takers, makers, cpmmState, ordersToCancel } = computeFills(
+            state,
+            outcome,
+            amount,
+            undefined,
+            unfilled,
+            balanceByUserId
+        );
+
+        const totalSpent = takers.reduce((s, t) => s + t.amount, 0);
+        const totalShares = takers.reduce((s, t) => s + t.shares, 0);
+
+        const probBefore = getCpmmProbability(contract.pool as unknown as { [outcome: string]: number }, contract.p ?? 0.5);
+        const probAfter = getCpmmProbability(cpmmState.pool as unknown as { [outcome: string]: number }, cpmmState.p);
+
+        if (totalSpent <= 0 || totalShares <= 0) {
+            return { success: false, error: 'Order could not be filled' };
+        }
+
+        updateUserBalance(userId, -totalSpent);
+
+        const betId = generateId();
+        const now = Date.now();
+
+        const bet: Bet = {
+            id: betId,
+            contractId,
+            userId,
+            amount: totalSpent,
+            shares: totalShares,
+            outcome,
+            probBefore,
+            probAfter,
+            isRedemption: false,
+            isFilled: true,
+            isCancelled: false,
+            createdTime: now
+        };
+
+        addBet(contractId, bet);
+
+        contract.pool = cpmmState.pool as unknown as Pool;
+        contract.p = cpmmState.p;
+        contract.volume += totalSpent;
+        contract.lastBetTime = now;
+        contract.lastUpdatedTime = now;
+        saveContract(contract);
+
+        applyMakerFills(betId, makers);
+        cancelOrders(ordersToCancel);
+
+        const userBalance = getOrCreateUser(userId).balance;
+
+        addPricePoint(contractId, probAfter);
+
+        checkAndFillLimitOrders(contractId);
+
+        return {
+            success: true,
+            bet,
+            shares: totalShares,
+            probBefore,
+            probAfter,
+            newBalance: userBalance,
+            redemptionBets: []
+        };
     }
 
     // 3.5 MULTI-CHOICE NORMALIZATION (Sum-To-One) - EXACT MANIFOLD ARBITRAGE
@@ -218,7 +300,18 @@ export function placeBet(params: PlaceBetParams): PlaceBetResult {
         contract.volume += amount;
         contract.lastBetTime = now;
         contract.lastUpdatedTime = now;
+        // Start graduation if threshold reached (applies to multi-choice too)
+        const GRAD_THRESHOLD = 1000;
+        if (contract.phase === 'sandbox' && contract.volume >= GRAD_THRESHOLD) {
+            contract.phase = 'graduating';
+            contract.graduationStartTime = now;
+            console.log(`[Graduation] Market ${contract.id} started graduation at volume $${contract.volume}`);
+        }
         saveContract(contract);
+        // Fill any limit orders that became matchable after this trade (main markets only)
+        if (contract.outcomeType === 'BINARY') {
+            checkAndFillLimitOrders(contractId);
+        }
 
         return {
             success: true,
@@ -328,6 +421,10 @@ export function placeBet(params: PlaceBetParams): PlaceBetResult {
 
     // 12. Add price point for chart
     addPricePoint(contractId, probAfter);
+    // Check any waiting limit orders after the price move (main markets only)
+    if (contract.outcomeType === 'BINARY') {
+        checkAndFillLimitOrders(contractId);
+    }
 
     // 13. REDEMPTION: Check if user now holds both YES and NO shares
     // If so, convert pairs to cash (1 YES + 1 NO = $1)

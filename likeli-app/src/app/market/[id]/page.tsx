@@ -6,6 +6,7 @@ import MultiOutcomeChart from "@/components/market/MultiOutcomeChart";
 import OracleStatus from "@/components/market/OracleStatus";
 import TradePanel from "@/components/trade/TradePanel";
 import MultiChoiceAnswerList from "@/components/trade/MultiChoiceAnswerList";
+import MyBets from "@/components/trade/MyBets";
 import styles from "@/components/trade/trade.module.css";
 import { useParams } from "next/navigation";
 import OrderBook from "@/components/trade/OrderBook";
@@ -21,6 +22,7 @@ export default function MarketPage() {
     const [loading, setLoading] = useState(true);
     const [refreshTrigger, setRefreshTrigger] = useState(0);
     const [marketDataFull, setMarketDataFull] = useState<any>(null);
+    const [selectedOutcome, setSelectedOutcome] = useState<'yes' | 'no'>('yes');
 
     const fetchData = async () => {
         try {
@@ -33,13 +35,37 @@ export default function MarketPage() {
 
                 const prob = marketData.probability || 0.5;
 
-                setOrderbook({
-                    marketId: marketData.id,
-                    yes: { bids: [], asks: [], bestAsk: prob, bestBid: prob },
-                    no: { bids: [], asks: [], bestAsk: 1 - prob, bestBid: 1 - prob },
-                    probability: prob * 100,
-                    lastTradePrice: prob
-                } as any);
+                // Fetch orderbook for main markets (both binary and multi-choice)
+                if (marketData.phase === 'main') {
+                    const obRes = await fetch(`/api/manifold/limit-order?contractId=${id}`);
+                    if (obRes.ok) {
+                        const obJson = await obRes.json();
+                        const ob = obJson.orderbook;
+                        setOrderbook({
+                            marketId: marketData.id,
+                            yes: ob?.yes ?? { bids: [], asks: [], bestAsk: prob, bestBid: prob },
+                            no: ob?.no ?? { bids: [], asks: [], bestAsk: 1 - prob, bestBid: 1 - prob },
+                            probability: prob * 100,
+                            lastTradePrice: prob
+                        } as any);
+                    } else {
+                        setOrderbook({
+                            marketId: marketData.id,
+                            yes: { bids: [], asks: [], bestAsk: prob, bestBid: prob },
+                            no: { bids: [], asks: [], bestAsk: 1 - prob, bestBid: 1 - prob },
+                            probability: prob * 100,
+                            lastTradePrice: prob
+                        } as any);
+                    }
+                } else {
+                    setOrderbook({
+                        marketId: marketData.id,
+                        yes: { bids: [], asks: [], bestAsk: prob, bestBid: prob },
+                        no: { bids: [], asks: [], bestAsk: 1 - prob, bestBid: 1 - prob },
+                        probability: prob * 100,
+                        lastTradePrice: prob
+                    } as any);
+                }
 
                 if (marketData.priceHistory) {
                     setPriceHistory(marketData.priceHistory);
@@ -148,7 +174,8 @@ export default function MarketPage() {
 
     // Check if multi-choice market
     const isMultiChoice = marketDataFull?.outcomeType === 'MULTIPLE_CHOICE' && marketDataFull?.answers?.length > 0;
-    const isSandbox = id.startsWith("sb_");
+    const marketPhase = marketDataFull?.phase;
+    const isSandbox = marketPhase ? marketPhase !== 'main' : id.startsWith("sb_");
 
     // Extract Data
     const bids = orderbook?.yes.bids.map(b => ({ price: b.price, size: b.qty })) || [];
@@ -197,6 +224,7 @@ export default function MarketPage() {
                             marketId={id}
                             answers={marketDataFull.answers}
                             onTrade={handleOrderPlaced}
+                            phase={marketDataFull?.phase}
                         />
                     </>
                 ) : (
@@ -255,6 +283,16 @@ export default function MarketPage() {
                                 <span style={{ color: "var(--text-main)" }}>{marketDataFull.answers?.length || 0}</span>
                             </div>
                         </div>
+
+                        {/* My Activity Section for Multi-Choice */}
+                        <div style={{ marginTop: "16px", borderTop: "1px solid var(--border-subtle)", paddingTop: "16px" }}>
+                            <h3 style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase", marginBottom: "8px" }}>
+                                My Activity
+                            </h3>
+                            <div style={{ maxHeight: "150px", overflowY: "auto" }}>
+                                <MyBets marketId={id} isManifold={isSandbox} />
+                            </div>
+                        </div>
                     </div>
                 ) : (
                     <TradePanel
@@ -263,14 +301,17 @@ export default function MarketPage() {
                         onOrderPlaced={handleOrderPlaced}
                         currentPrice={yesPrice}
                         bestAsk={bestAsk}
+                        onOutcomeChange={(outcome: 'yes' | 'no') => setSelectedOutcome(outcome)}
                     />
                 )}
 
-                {!isSandbox && !isMultiChoice && (
+                {/* Show OrderBook for main binary markets only - multi-choice has per-answer orderbook */}
+                {marketPhase === 'main' && !isMultiChoice && (
                     <OrderBook
                         bids={bids}
                         asks={asks}
                         lastTrade={undefined}
+                        selectedOutcome={selectedOutcome}
                     />
                 )}
 

@@ -13,9 +13,10 @@ interface OrderBookProps {
     bids: OrderLevel[];
     asks: OrderLevel[];
     lastTrade?: number;
+    selectedOutcome?: 'yes' | 'no';
 }
 
-export default function OrderBook({ bids, asks, lastTrade }: OrderBookProps) {
+export default function OrderBook({ bids, asks, lastTrade, selectedOutcome = 'yes' }: OrderBookProps) {
     // Aggregation logic removed because API already aggregates (or we trust the passed aggregated data)
     // The previous component aggregated raw orders.
     // If API returns levels, we just display them.
@@ -32,15 +33,15 @@ export default function OrderBook({ bids, asks, lastTrade }: OrderBookProps) {
 
     // Calculate max size for visual bars
     const maxSize = Math.max(
-        ...displayBids.map(b => b.size),
-        ...displayAsks.map(a => a.size),
+        ...displayBids.map(b => b.size ?? 0),
+        ...displayAsks.map(a => a.size ?? 0),
         1
     );
 
     return (
         <div className="flex flex-col gap-4">
             <div className="bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-lg p-4 shadow-sm">
-                <h3 className="text-[var(--text-main)] font-semibold mb-3 text-sm">Order Book (YES)</h3>
+                <h3 className="text-[var(--text-main)] font-semibold mb-3 text-sm">Order Book ({selectedOutcome.toUpperCase()})</h3>
 
                 <div className="flex gap-4">
                     {/* Bids Column (Green) */}
@@ -58,11 +59,11 @@ export default function OrderBook({ bids, asks, lastTrade }: OrderBookProps) {
                                 >
                                     <div
                                         className="absolute top-0 right-0 bottom-0 bg-[var(--color-success)] opacity-10"
-                                        style={{ width: `${(bid.size / maxSize) * 100}%` }}
+                                        style={{ width: `${((bid.size ?? 0) / maxSize) * 100}%` }}
                                     />
-                                    <div className="relative text-left text-[var(--color-success)] font-medium">{bid.price.toFixed(2)}¢</div>
-                                    <div className="relative text-right text-[var(--text-main)]">{bid.size.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
-                                    <div className="relative text-right text-[var(--text-secondary)]">${(bid.price * bid.size).toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
+                                    <div className="relative text-left text-[var(--color-success)] font-medium">{(bid.price ?? 0).toFixed(2)}¢</div>
+                                    <div className="relative text-right text-[var(--text-main)]">{(bid.size ?? 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
+                                    <div className="relative text-right text-[var(--text-secondary)]">${((bid.price ?? 0) * (bid.size ?? 0)).toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
                                 </div>
                             ))}
                             {displayBids.length === 0 && (
@@ -86,11 +87,11 @@ export default function OrderBook({ bids, asks, lastTrade }: OrderBookProps) {
                                 >
                                     <div
                                         className="absolute top-0 left-0 bottom-0 bg-[var(--color-danger)] opacity-10"
-                                        style={{ width: `${(ask.size / maxSize) * 100}%` }}
+                                        style={{ width: `${((ask.size ?? 0) / maxSize) * 100}%` }}
                                     />
-                                    <div className="relative text-left text-[var(--color-danger)] font-medium">{ask.price.toFixed(2)}¢</div>
-                                    <div className="relative text-right text-[var(--text-main)]">{ask.size.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
-                                    <div className="relative text-right text-[var(--text-secondary)]">${(ask.price * ask.size).toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
+                                    <div className="relative text-left text-[var(--color-danger)] font-medium">{(ask.price ?? 0).toFixed(2)}¢</div>
+                                    <div className="relative text-right text-[var(--text-main)]">{(ask.size ?? 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
+                                    <div className="relative text-right text-[var(--text-secondary)]">${((ask.price ?? 0) * (ask.size ?? 0)).toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
                                 </div>
                             ))}
                             {displayAsks.length === 0 && (

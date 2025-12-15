@@ -2,8 +2,8 @@
 // Limit Order Matching - 100% Manifold Match (Part 3)
 
 import { Pool, LimitBet, Bet } from './types';
-import { calculateCpmmPurchase, generateId } from './cpmm';
-import { getContract, saveContract, getBets, addBet, getOrCreateUser, updateUserBalance, getOrCreateMetric, updateMetric, addPricePoint } from './store';
+import { calculateCpmmPurchase, generateId, getCpmmProbability } from './cpmm';
+import { getContract, saveContract, getBets, addBet, getOrCreateUser, updateUserBalance, getOrCreateMetric, updateMetric, addPricePoint, getUserBalance } from './store';
 
 // ============================================
 // LIMIT ORDER STORE
@@ -40,6 +40,14 @@ export function cancelLimitOrder(contractId: string, orderId: string): boolean {
         return true;
     }
     return false;
+}
+
+export function getBalanceByUserId(orders: LimitBet[]): Record<string, number> {
+    const balances: Record<string, number> = {};
+    orders.forEach((o) => {
+        balances[o.userId] = getUserBalance(o.userId);
+    });
+    return balances;
 }
 
 // ============================================
@@ -145,6 +153,8 @@ export interface PlaceLimitOrderResult {
     order?: LimitBet;
     fills?: { amount: number; shares: number }[];
     remainingAmount?: number;
+    newBalance?: number;
+    currentProbability?: number;
 }
 
 /**
@@ -177,11 +187,36 @@ export function placeLimitOrder(params: PlaceLimitOrderParams): PlaceLimitOrderR
     if (!contract) {
         return { success: false, error: 'Contract not found' };
     }
+    if (contract.phase !== 'main') {
+        return { success: false, error: 'Limit orders only available on main markets' };
+    }
+    // Support both BINARY and MULTIPLE_CHOICE markets
+    if (contract.outcomeType !== 'BINARY' && contract.outcomeType !== 'MULTIPLE_CHOICE') {
+        return { success: false, error: 'Limit orders only supported on binary and multi-choice markets' };
+    }
     if (contract.resolution) {
         return { success: false, error: 'Market already resolved' };
     }
 
-    const currentProb = contract.p;
+    // For multi-choice, require answerId and get answer-specific pool
+    const isMultiChoice = contract.outcomeType === 'MULTIPLE_CHOICE';
+    let pool = contract.pool;
+    let p = contract.p ?? 0.5;
+
+    if (isMultiChoice) {
+        if (!answerId) {
+            return { success: false, error: 'answerId required for multi-choice markets' };
+        }
+        const answer = contract.answers?.find(a => a.id === answerId);
+        if (!answer) {
+            return { success: false, error: 'Answer not found' };
+        }
+        // Use answer-specific pool
+        pool = { YES: answer.poolYes, NO: answer.poolNo };
+        p = answer.p ?? 0.5;
+    }
+
+    const currentProb = getCpmmProbability(pool, p);
 
     // Check if limit can be filled immediately via AMM
     // For YES orders: fill if current price <= limit price
@@ -194,7 +229,7 @@ export function placeLimitOrder(params: PlaceLimitOrderParams): PlaceLimitOrderR
         // Fill via regular CPMM - import and use placeBet
         // For simplicity, we'll create the order as filled
         const { shares, newPool, probBefore, probAfter } = calculateCpmmPurchase(
-            contract.pool,
+            pool,
             amount,
             outcome
         );
@@ -207,6 +242,7 @@ export function placeLimitOrder(params: PlaceLimitOrderParams): PlaceLimitOrderR
             id: orderId,
             contractId,
             userId,
+            answerId,  // Include answerId for multi-choice
             amount,
             shares,
             outcome,
@@ -222,11 +258,20 @@ export function placeLimitOrder(params: PlaceLimitOrderParams): PlaceLimitOrderR
         };
 
         // Deduct balance
-        updateUserBalance(userId, -amount);
+        const updatedUser = updateUserBalance(userId, -amount);
 
-        // Update contract
-        contract.pool = newPool;
-        contract.p = probAfter;
+        // Update contract or answer pool
+        if (isMultiChoice && answerId) {
+            const answer = contract.answers?.find(a => a.id === answerId);
+            if (answer) {
+                answer.poolYes = newPool.YES;
+                answer.poolNo = newPool.NO;
+                answer.prob = probAfter;
+            }
+        } else {
+            contract.pool = newPool;
+            contract.p = probAfter;
+        }
         contract.volume += amount;
         contract.lastBetTime = now;
         contract.lastUpdatedTime = now;
@@ -254,7 +299,9 @@ export function placeLimitOrder(params: PlaceLimitOrderParams): PlaceLimitOrderR
             success: true,
             order,
             fills: [{ amount, shares }],
-            remainingAmount: 0
+            remainingAmount: 0,
+            newBalance: updatedUser.balance,
+            currentProbability: probAfter
         };
     }
 
@@ -266,6 +313,7 @@ export function placeLimitOrder(params: PlaceLimitOrderParams): PlaceLimitOrderR
         id: orderId,
         contractId,
         userId,
+        answerId,  // Include answerId for multi-choice
         amount: 0,  // Not filled yet
         shares: 0,
         outcome,
@@ -281,7 +329,7 @@ export function placeLimitOrder(params: PlaceLimitOrderParams): PlaceLimitOrderR
     };
 
     // Reserve balance (deduct now, refund if cancelled)
-    updateUserBalance(userId, -amount);
+    const updatedUser = updateUserBalance(userId, -amount);
 
     // Add to limit order book
     addLimitOrder(contractId, order);
@@ -290,7 +338,9 @@ export function placeLimitOrder(params: PlaceLimitOrderParams): PlaceLimitOrderR
         success: true,
         order,
         fills: [],
-        remainingAmount: amount
+        remainingAmount: amount,
+        newBalance: updatedUser.balance,
+        currentProbability: currentProb
     };
 }
 
@@ -306,7 +356,7 @@ export function checkAndFillLimitOrders(contractId: string): void {
     if (!contract) return;
 
     const orders = getLimitOrders(contractId);
-    const currentProb = contract.p;
+    let currentProb = getCpmmProbability(contract.pool, contract.p ?? 0.5);
 
     for (const order of orders) {
         if (order.isFilled || order.isCancelled) continue;
@@ -340,6 +390,7 @@ export function checkAndFillLimitOrders(contractId: string): void {
             contract.p = probAfter;
             contract.volume += remainingAmount;
             contract.lastUpdatedTime = Date.now();
+            currentProb = getCpmmProbability(contract.pool, contract.p ?? 0.5);
 
             // Update metrics
             const metric = getOrCreateMetric(order.userId, contractId);
@@ -378,6 +429,93 @@ export function getUserOpenOrders(userId: string): LimitBet[] {
         });
     });
     return allOrders;
+}
+
+export function applyMakerFills(takerBetId: string, makers: { bet: LimitBet; amount: number; shares: number; timestamp: number }[]) {
+    const grouped = new Map<string, { order: LimitBet; newFills: { amount: number; shares: number; matchedBetId: string; timestamp: number; fees: typeof import('./types').noFees }[] }>();
+
+    makers.forEach((maker) => {
+        const entry = grouped.get(maker.bet.id) ?? { order: maker.bet, newFills: [] };
+        entry.newFills.push({
+            amount: maker.amount,
+            shares: maker.shares,
+            matchedBetId: takerBetId,
+            timestamp: maker.timestamp,
+            fees: { creatorFee: 0, platformFee: 0, liquidityFee: 0 }
+        });
+        grouped.set(maker.bet.id, entry);
+    });
+
+    grouped.forEach(({ order, newFills }) => {
+        const existing = order.fills ?? [];
+        const merged = [...existing, ...newFills];
+        const deltaAmount = newFills.reduce((s, f) => s + f.amount, 0);
+        const deltaShares = newFills.reduce((s, f) => s + f.shares, 0);
+
+        order.fills = merged;
+        order.amount = (order.amount ?? 0) + deltaAmount;
+        order.shares = (order.shares ?? 0) + deltaShares;
+        order.isFilled = order.amount >= order.orderAmount;
+
+        const metric = getOrCreateMetric(order.userId, order.contractId, order.answerId);
+        if (order.outcome === 'YES') {
+            metric.totalSharesYes += deltaShares;
+            metric.hasYesShares = true;
+        } else {
+            metric.totalSharesNo += deltaShares;
+            metric.hasNoShares = true;
+        }
+        metric.invested += deltaAmount;
+        updateMetric(metric);
+    });
+}
+
+export function cancelOrders(orders: LimitBet[]) {
+    orders.forEach((order) => {
+        if (order.isCancelled) return;
+        const remaining = (order.orderAmount ?? 0) - (order.amount ?? 0);
+        if (remaining > 0) {
+            updateUserBalance(order.userId, remaining);
+        }
+        order.isCancelled = true;
+    });
+}
+
+export function getOrderBookLevels(contractId: string) {
+    const active = getActiveLimitOrders(contractId);
+
+    const bids = active
+        .filter((o) => o.outcome === 'YES')
+        .map((o) => ({
+            price: o.limitProb,
+            size: Math.max(0, (o.orderAmount ?? 0) - (o.amount ?? 0))
+        }))
+        .filter((l) => l.size > 0)
+        .sort((a, b) => b.price - a.price);
+
+    const asks = active
+        .filter((o) => o.outcome === 'NO')
+        .map((o) => ({
+            price: 1 - o.limitProb,
+            size: Math.max(0, (o.orderAmount ?? 0) - (o.amount ?? 0))
+        }))
+        .filter((l) => l.size > 0)
+        .sort((a, b) => a.price - b.price);
+
+    return {
+        yes: {
+            bids,
+            asks,
+            bestBid: bids[0]?.price,
+            bestAsk: asks[0]?.price
+        },
+        no: {
+            bids: asks,
+            asks: bids,
+            bestBid: asks[0]?.price ? 1 - asks[0].price : undefined,
+            bestAsk: bids[0]?.price ? 1 - bids[0].price : undefined
+        }
+    };
 }
 
 // ============================================

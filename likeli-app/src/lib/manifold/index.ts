@@ -46,7 +46,6 @@ export {
     calculateCpmmMultiArbitrageBet,
     calculateCpmmMultiArbitrageSellYes,
     calculateCpmmMultiArbitrageSellNo,
-    calculateCpmmMultiSumsToOneSale,
     buyNoSharesUntilAnswersSumToOne,
     combineBetsOnSameAnswers,
     floatingArbitrageEqual,
@@ -125,7 +124,8 @@ export {
     cancelUserOrder,
     getUserOpenOrders,
     expireLimitOrders,
-    getActiveLimitOrders
+    getActiveLimitOrders,
+    getOrderBookLevels
 } from './limit-orders';
 export type { PlaceLimitOrderParams, PlaceLimitOrderResult, ExpireLimitOrdersResult } from './limit-orders';
 

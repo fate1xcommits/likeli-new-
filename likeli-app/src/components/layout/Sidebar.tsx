@@ -30,7 +30,14 @@ export default function Sidebar() {
 
   return (
     <aside className={styles.sidebar}>
-      <div className={styles.logo}>Likeli</div>
+      <div className={styles.logo}>
+        <img
+          src="/likeli-logo.png"
+          alt="Likeli logo"
+          className={styles.logoImage}
+        />
+        <span>Likeli</span>
+      </div>
 
       <nav className={styles.nav}>
         {NAV_ITEMS.map((item) => {
